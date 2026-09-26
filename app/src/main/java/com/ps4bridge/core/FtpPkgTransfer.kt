@@ -85,7 +85,7 @@ object FtpPkgTransfer {
                 if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) throw IOException("Source HTTP $code")
 
                 BufferedInputStream(http.inputStream, cfg.bufferBytes).use { input ->
-                    BufferedOutputStream(data, cfg.bufferBytes).use { output ->
+                    BufferedOutputStream(data.getOutputStream(), cfg.bufferBytes).use { output ->
                         val buffer = ByteArray(cfg.bufferBytes)
                         var lastTime = System.nanoTime()
                         var lastBytes = written
