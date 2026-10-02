@@ -1,5 +1,6 @@
-.gradle/
+PS4Monitor-apk/
+*.apk
 build/
+.gradle/
 local.properties
-*.iml
 .idea/

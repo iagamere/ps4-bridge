@@ -1,37 +1,33 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
-
 android {
-    namespace = "com.ps4bridge"
+    namespace = "com.abdo.ps4monitor"
     compileSdk = 34
-
     defaultConfig {
-        applicationId = "com.ps4bridge"
-        minSdk = 26
-        // Deliberately 34: apps targeting 35+ get a ~6 h time limit on "dataSync" foreground services,
-        // which would kill a very long transfer. This app is sideloaded, so it is not required to target 35.
-        targetSdk = 34
-        versionCode = 12
-        versionName = "1.2"
+        applicationId = "com.abdo.ps4monitor"
+        minSdk = 26; targetSdk = 34; versionCode = 4; versionName = "2.2"
     }
-
-    buildTypes {
-        release { isMinifyEnabled = false }
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore"); storePassword = "android"
+            keyAlias = "androiddebugkey"; keyPassword = "android"
+        }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    buildFeatures { compose = true }
+    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
 }
-
 dependencies {
-    testImplementation(kotlin("test"))
+    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("commons-net:commons-net:3.10.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
-// No third-party dependencies on purpose: fewer things can break the build.
