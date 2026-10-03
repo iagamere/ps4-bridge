@@ -46,6 +46,7 @@ object Tx {
         "Expected size reached — waiting for the PS4 to finish the file…" to "بلغ الحجم المتوقع — بانتظار أن ينهي الـPS4 الملف…",
         "PS4 connection lost" to "انقطع الاتصال بالـPS4",
         "Reached the expected size and stayed stable (the PS4 kept the temporary file name)." to "بلغ الحجم المتوقع وبقي ثابتًا (أبقى الـPS4 اسم الملف المؤقت).",
+        "PKG header (agrees with PFS image end)" to "ترويسة PKG (تطابق نهاية صورة PFS)", "PKG header" to "ترويسة PKG", "PKG header (unconfirmed)" to "ترويسة PKG (غير مؤكد)",
         "entered by you" to "أدخلته أنت",
         "known" to "معروف",
         // connection / probe

@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
             Button(onClick = { ctx.startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }) { Lbl(tr("Battery settings", "إعدادات البطارية")) }
         } }
         item { NavRow(R.drawable.ic_search, tr("Advanced", "متقدم"), tr("Debug log, history", "سجل التصحيح، السجل القديم")) { nav.navigate("settings/advanced") } }
-        item { Dim("PS4 Download Monitor 2.2") }
+        item { Dim("PS4 Download Monitor 2.3") }
     }
 }
 

@@ -132,7 +132,7 @@ object DownloadRepo {
                 .put("started", d.startedAt).put("completed", d.completedAt).put("seen", d.lastSeenAt)
                 .put("err", d.errorMessage ?: JSONObject.NULL).put("nid", d.notificationId)
                 .put("base", d.baseline?.let { b -> JSONObject().also { o -> b.forEach { (k, v) -> o.put(k, v) } } } ?: JSONObject.NULL)
-                .put("fname", d.fileName ?: JSONObject.NULL).put("sup", d.superseded).put("tn", d.terminalNotified).put("upd", d.updatedAt))
+                .put("fname", d.fileName ?: JSONObject.NULL).put("ptitle", d.pkgTitle ?: JSONObject.NULL).put("ptid", d.titleId ?: JSONObject.NULL).put("icon", d.iconReady).put("sup", d.superseded).put("tn", d.terminalNotified).put("upd", d.updatedAt))
         }
         Store.secure.edit().putString("downloads", arr.toString()).apply()
     }
@@ -148,7 +148,7 @@ object DownloadRepo {
                 DlState.valueOf(o.getString("state")), o.optString("note"), o.getLong("created"), o.optLong("submitted"),
                 o.optLong("started"), o.optLong("completed"), o.optLong("seen"), s("err"), o.getInt("nid"),
                 if (o.isNull("base")) null else o.getJSONObject("base").let { b -> b.keys().asSequence().associateWith { k -> b.getLong(k) } },
-                o.optBoolean("sup"), o.optBoolean("tn"), o.optLong("upd", o.getLong("created")), s("fname"))
+                o.optBoolean("sup"), o.optBoolean("tn"), o.optLong("upd", o.getLong("created")), s("ptitle"), s("ptid"), o.optBoolean("icon"), s("fname"))
         }.getOrNull() }
     }
 }

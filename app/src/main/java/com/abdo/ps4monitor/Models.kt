@@ -55,6 +55,7 @@ data class Download(
     val baseline: Map<String, Long>? = null,
     val superseded: Boolean = false, val terminalNotified: Boolean = false,
     val updatedAt: Long = createdAt,
+    val pkgTitle: String? = null, val titleId: String? = null, val iconReady: Boolean = false,   // read from the PKG itself (see Pkg.kt)
     val fileName: String? = null,                  // name chosen in the app (sent to ezRemote when "send name" is on)
     val speeds: List<Float> = emptyList()          // runtime only, not persisted
 ) {

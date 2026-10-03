@@ -10,6 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,14 +25,32 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 
-@Composable fun ConfirmDelete(ids: List<String>, onDone: () -> Unit, close: () -> Unit) {
-    val n = ids.size
-    AlertDialog(onDismissRequest = close,
+@Composable fun ConfirmDelete(ids: List<String>, onDone: () -> Unit, close: () -> Unit, defaultAlsoPs4: Boolean = false) {
+    val n = ids.size; val ctx = LocalContext.current; val scope = rememberCoroutineScope()
+    var also by remember { mutableStateOf(defaultAlsoPs4) }
+    var busy by remember { mutableStateOf(false) }
+    val anyActive = ids.any { id -> DownloadRepo.get(id)?.state?.active == true }
+    AlertDialog(onDismissRequest = { if (!busy) close() },
         title = { Text(tr("Delete $n download(s)?", "حذف $n تحميل؟")) },
-        text = { Text(tr("They are removed from this list only. Files on the PS4 are not deleted, and a download that is still running on the PS4 keeps running.",
-                         "سيُحذف من هذه القائمة فقط. لا تُحذف الملفات من الـPS4، وأي تحميل ما زال يعمل على الـPS4 سيستمر.")) },
-        confirmButton = { TextButton(onClick = { ids.forEach { DownloadMonitor.remove(it) }; onDone(); close() }) { Lbl(tr("Delete", "حذف"), color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = close) { Lbl(tr("Cancel", "إلغاء")) } })
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(if (also) tr("The download and its file(s) on the PS4 will be deleted over FTP. This cannot be undone.", "سيُحذف التحميل وملفاته على الـPS4 عبر FTP. لا يمكن التراجع.")
+                 else tr("Removed from this list only. Files on the PS4 are kept, and a download still running on the PS4 keeps running.", "سيُحذف من هذه القائمة فقط. تبقى الملفات على الـPS4 وأي تحميل جارٍ سيستمر."))
+            Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { also = !also }, verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(also, { also = it }, enabled = !busy); Text(tr("Also delete the file(s) from the PS4", "احذف الملف (الملفات) من الـPS4 أيضًا"), Modifier.weight(1f))
+            }
+            if (also && anyActive) Dim(tr("For a download still running, the PS4 may keep transferring data to the deleted file. This app cannot cancel ezRemote's transfer itself.",
+                "لتحميل ما زال جاريًا قد يواصل الـPS4 نقل البيانات إلى الملف المحذوف. التطبيق لا يستطيع إلغاء نقل ezRemote نفسه."))
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        } },
+        confirmButton = { TextButton(enabled = !busy, onClick = {
+            busy = true
+            scope.launch {
+                val msgs = ids.map { id -> if (also) DownloadMonitor.deleteFromPs4(id, true) else { DownloadMonitor.remove(id); "" } }.filter { it.isNotBlank() }
+                if (msgs.isNotEmpty()) Toast.makeText(ctx, msgs.joinToString("\n").take(400), Toast.LENGTH_LONG).show()
+                onDone(); close()
+            }
+        }) { Lbl(tr("Delete", "حذف"), color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(enabled = !busy, onClick = close) { Lbl(tr("Cancel", "إلغاء")) } })
 }
 private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Monitoring stopped. The PS4 may still be downloading.", "أُوقفت المراقبة. قد يستمر الـPS4 في التحميل."), Toast.LENGTH_LONG).show()
 
@@ -36,7 +59,7 @@ private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Mo
     val all by DownloadRepo.all.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     var sel by remember { mutableStateOf(setOf<String>()) }
-    var confirm by remember { mutableStateOf<List<String>?>(null) }
+    var confirm by remember { mutableStateOf<Pair<List<String>, Boolean>?>(null) }
     val active = all.filter { it.state.active }
     val done = all.filter { it.state == DlState.COMPLETED }
     val failed = all.filter { it.state == DlState.FAILED || it.state == DlState.NOT_STARTED || it.state == DlState.STOPPED }
@@ -53,7 +76,7 @@ private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Mo
                 IconButton(onClick = { sel = shown.map { it.id }.toSet() }) { Ico(R.drawable.ic_select_all) }
                 if (selIds.any { id -> all.firstOrNull { it.id == id }?.state?.active == true })
                     IconButton(onClick = { selIds.forEach { id -> if (all.firstOrNull { it.id == id }?.state?.active == true) DownloadMonitor.stop(id) }; sel = emptySet(); stopToast(ctx) }) { Ico(R.drawable.ic_stop) }
-                IconButton(onClick = { confirm = selIds }) { Ico(R.drawable.ic_delete, tint = MaterialTheme.colorScheme.error) }
+                IconButton(onClick = { confirm = selIds to false }) { Ico(R.drawable.ic_delete, tint = MaterialTheme.colorScheme.error) }
             } else {
                 Text(tr("Downloads", "التحميلات"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
                 if (shown.isNotEmpty()) IconButton(onClick = { sel = shown.map { it.id }.toSet() }) { Ico(R.drawable.ic_select_all) }
@@ -71,11 +94,11 @@ private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Mo
                 DownloadCard(d,
                     onOpen = { if (selecting) sel = if (d.id in sel) sel - d.id else sel + d.id else nav.navigate("downloads/${d.id}") },
                     onLong = { sel = sel + d.id }, selected = if (selecting) d.id in selIds else null,
-                    onStop = { DownloadMonitor.stop(d.id); stopToast(ctx) }, onDelete = { confirm = listOf(d.id) })
+                    onStop = { DownloadMonitor.stop(d.id); stopToast(ctx) }, onDelete = { confirm = listOf(d.id) to false })
             }
         }
     }
-    confirm?.let { ConfirmDelete(it, onDone = { sel = emptySet() }, close = { confirm = null }) }
+    confirm?.let { (ids, also) -> ConfirmDelete(ids, onDone = { sel = emptySet() }, close = { confirm = null }, defaultAlsoPs4 = also) }
 }
 
 @Composable fun DownloadDetail(id: String, nav: NavController) {
@@ -83,17 +106,20 @@ private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Mo
     val untracked by DownloadMonitor.untracked.collectAsState()
     val d = all.firstOrNull { it.id == id }
     val ctx = LocalContext.current; val scope = rememberCoroutineScope()
-    var confirm by remember { mutableStateOf<List<String>?>(null) }
+    var confirm by remember { mutableStateOf<Pair<List<String>, Boolean>?>(null) }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BackHeader(tr("Download", "التحميل"), nav)
         if (d == null) { Text(tr("This download was removed.", "تم حذف هذا التحميل.")); return@Column }
         val ps4 = Ps4Repo.get(d.ps4Id)
         val (bg, fg) = stateColors(d.state)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(bg), contentAlignment = Alignment.Center) { Ico(stateIcon(d.state), 28.dp, fg) }
+            val art by produceState<Bitmap?>(null, d.id, d.iconReady) { value = if (d.iconReady) withContext(Dispatchers.IO) { PkgStore.bitmap("d:${d.id}", "icon0.png", 256) } else null }
+            val pic = art
+            if (pic != null) Image(pic.asImageBitmap(), null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Crop)
+            else Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(bg), contentAlignment = Alignment.Center) { Ico(stateIcon(d.state), 28.dp, fg) }
             Column(Modifier.weight(1f)) {
-                Text(d.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Dim("${ps4?.name ?: tr("Removed PS4", "جهاز محذوف")}  •  " + tr("attempt", "المحاولة") + " ${d.attempt}", maxLines = 1)
+                Text(d.pkgTitle ?: d.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Dim("${listOfNotNull(d.titleId).joinToString()}  ${ps4?.name ?: tr("Removed PS4", "جهاز محذوف")}  •  " + tr("attempt", "المحاولة") + " ${d.attempt}", maxLines = 1)
             }
         }
         Panel {
@@ -150,10 +176,13 @@ private fun stopToast(ctx: android.content.Context) = Toast.makeText(ctx, tr("Mo
                 Button(onClick = { scope.launch { Toast.makeText(ctx, resultText(DownloadMonitor.retry(d.id)), Toast.LENGTH_LONG).show() } }) { Ico(R.drawable.ic_refresh, 18.dp); Spacer(Modifier.width(6.dp)); Lbl(tr("Retry", "إعادة المحاولة")) }
             if (!d.superseded && d.state in setOf(DlState.NOT_STARTED, DlState.FAILED, DlState.STOPPED))
                 OutlinedButton(onClick = { DownloadMonitor.resume(d.id) }) { Lbl(tr("Resume monitoring", "استئناف المراقبة")) }
-            OutlinedButton(onClick = { confirm = listOf(d.id) }) { Ico(R.drawable.ic_delete, 18.dp, MaterialTheme.colorScheme.error); Spacer(Modifier.width(6.dp)); Lbl(tr("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            OutlinedButton(onClick = { confirm = listOf(d.id) to false }) { Ico(R.drawable.ic_delete, 18.dp, MaterialTheme.colorScheme.error); Spacer(Modifier.width(6.dp)); Lbl(tr("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            if (d.tempPath != null || d.finalPath != null) Button(onClick = { confirm = listOf(d.id) to true }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Ico(R.drawable.ic_delete, 18.dp); Spacer(Modifier.width(6.dp)); Lbl(tr("Delete from PS4", "حذف من الـPS4")) }
+            if (ps4 != null && PkgInspector.ftpOn(ps4) && (d.tempPath ?: d.finalPath) != null && (d.iconReady || (d.finalPath ?: d.tempPath).orEmpty().lowercase().contains("pkg") || d.displayName.lowercase().endsWith(".pkg")))
+                FilledTonalButton(onClick = { nav.navigate(pkgRoute(ps4.id, d.finalPath ?: d.tempPath!!)) }) { Ico(R.drawable.ic_package, 18.dp); Spacer(Modifier.width(6.dp)); Lbl(tr("Inside the PKG", "ما بداخل الـPKG")) }
         }
         if (d.state.active) Dim(tr("“Stop” only stops this app from watching; it does not cancel the download on the PS4 (ezRemote has no confirmed cancel API). Retry sends a NEW request and is never automatic.",
             "«إيقاف» يوقف مراقبة التطبيق فقط ولا يلغي التحميل على الـPS4 (لا يوجد API مؤكد للإلغاء في ezRemote). إعادة المحاولة ترسل طلبًا جديدًا ولا تتم تلقائيًا."))
     }
-    confirm?.let { ConfirmDelete(it, onDone = { nav.popBackStack() }, close = { confirm = null }) }
+    confirm?.let { (ids, also) -> ConfirmDelete(ids, onDone = { nav.popBackStack() }, close = { confirm = null }, defaultAlsoPs4 = also) }
 }

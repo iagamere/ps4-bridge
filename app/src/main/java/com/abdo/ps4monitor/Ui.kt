@@ -9,6 +9,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -24,6 +31,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** Navigation route of the PKG inspector (path is URL-encoded because it contains slashes). */
+fun pkgRoute(ps4Id: String, path: String) = "pkg/${Uri.encode(ps4Id)}/${Uri.encode(path)}"
 
 object Inbox { val url = mutableStateOf<String?>(null) }    // non-null => "Download to PS4" dialog is open
 
@@ -87,12 +97,18 @@ fun resultText(r: SubmitResult) = Tx.t(when (r) {
     val container = if (selected == true) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
     Card(Modifier.fillMaxWidth().clip(shape).combinedClickable(onClick = onOpen, onLongClick = onLong), shape = shape, colors = CardDefaults.cardColors(containerColor = container)) {
         Row(Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(bg), contentAlignment = Alignment.Center) {
-                Ico(if (selected == true) R.drawable.ic_check else stateIcon(d.state), 24.dp, fg)
+            val art by produceState<Bitmap?>(null, d.id, d.iconReady) { value = if (d.iconReady) withContext(Dispatchers.IO) { PkgStore.bitmap("d:${d.id}", "icon0.png", 160) } else null }
+            val pic = art
+            Box(Modifier.size(56.dp)) {
+                if (pic != null) Image(pic.asImageBitmap(), null, Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(bg), contentAlignment = Alignment.Center) {
+                    Ico(if (selected == true) R.drawable.ic_check else stateIcon(d.state), 26.dp, fg) }
+                if (pic != null) Box(Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(bg).border(2.dp, container, CircleShape), contentAlignment = Alignment.Center) {
+                    Ico(if (selected == true) R.drawable.ic_check else stateIcon(d.state), 13.dp, fg) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(d.displayName, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Dim(ps4?.name ?: tr("Removed PS4", "جهاز محذوف"), maxLines = 1)
+                Text(d.pkgTitle ?: d.displayName, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Dim(listOfNotNull(ps4?.name ?: tr("Removed PS4", "جهاز محذوف"), d.titleId).joinToString("  •  "), maxLines = 1)
                 val exp = d.expectedSize?.takeIf { it > 0 }
                 if (d.currentSize > 0 || d.state == DlState.COMPLETED)
                     Text(if (exp != null) "${Fmt.bytes(d.currentSize)} / ${Fmt.bytes(exp)}" + (d.pct?.let { "  •  $it%" } ?: "") else Fmt.bytes(d.currentSize),

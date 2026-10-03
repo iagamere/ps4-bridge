@@ -23,7 +23,7 @@ private fun go(nav: NavController, r: String) = nav.navigate(r) { popUpTo(nav.gr
     Card(onClick = onClick, modifier = modifier, shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
         Column(Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Ico(icon, 26.dp, MaterialTheme.colorScheme.onSecondaryContainer)
-            Lbl(label, Modifier.fillMaxWidth(), MaterialTheme.typography.labelLarge, MaterialTheme.colorScheme.onSecondaryContainer, textAlign = TextAlign.Center)
+            Lbl(label, Modifier.fillMaxWidth(), MaterialTheme.typography.labelMedium, MaterialTheme.colorScheme.onSecondaryContainer, textAlign = TextAlign.Center)
         }
     }
 
@@ -40,6 +40,7 @@ private fun go(nav: NavController, r: String) = nav.navigate(r) { popUpTo(nav.gr
     var probing by remember { mutableStateOf(false) }
     var probeMsg by remember { mutableStateOf("") }
     var pick by remember { mutableStateOf(false) }
+    var delTmp by remember { mutableStateOf<Pair<String, FsEntry>?>(null) }
     fun refresh() { val p = ps4 ?: return; probing = true; scope.launch { probeMsg = DownloadMonitor.probe(p); probing = false } }
     LaunchedEffect(ps4?.id) { if (ps4 != null) refresh() }
 
@@ -88,9 +89,10 @@ private fun go(nav: NavController, r: String) = nav.navigate(r) { popUpTo(nav.gr
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActionTile(R.drawable.ic_link, tr("Add link", "إضافة رابط"), Modifier.weight(1f)) { Inbox.url.value = "" }
+                ActionTile(R.drawable.ic_link, tr("Link", "رابط"), Modifier.weight(1f)) { Inbox.url.value = "" }
                 ActionTile(R.drawable.ic_globe, tr("Browser", "المتصفح"), Modifier.weight(1f)) { go(nav, "browser") }
                 ActionTile(R.drawable.ic_download, tr("Downloads", "التحميلات"), Modifier.weight(1f)) { go(nav, "downloads") }
+                ActionTile(R.drawable.ic_folder, tr("Files", "الملفات"), Modifier.weight(1f)) { nav.navigate("files") }
             }
         }
         item { SectionTitle(tr("Active downloads", "التحميلات النشطة") + " (${active.size})") }
@@ -106,6 +108,7 @@ private fun go(nav: NavController, r: String) = nav.navigate(r) { popUpTo(nav.gr
                     Row(Modifier.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Text(e.name, maxLines = 1, overflow = TextOverflow.Ellipsis); Dim(Fmt.bytes(e.size)) }
                         TextButton(onClick = { ps4?.let { DownloadMonitor.adopt(it.id, dir, e) } }) { Lbl(tr("Monitor", "مراقبة")) }
+                        IconButton(onClick = { delTmp = dir to e }) { Ico(R.drawable.ic_delete, 22.dp, MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
             }
@@ -117,4 +120,5 @@ private fun go(nav: NavController, r: String) = nav.navigate(r) { popUpTo(nav.gr
             item { Panel { events.takeLast(6).reversed().forEach { Dim(Tx.ev(it)) } } }
         }
     }
+    delTmp?.let { d -> if (ps4 != null) ConfirmPs4Delete(ps4, listOf(d), onDone = { DownloadMonitor.kick(); refresh() }, close = { delTmp = null }) }
 }
